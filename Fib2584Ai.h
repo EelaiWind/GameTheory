@@ -8,6 +8,13 @@
 #include "Fib2584/GameBoard.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <list>
+#include <string>
+#include <iostream>
+
+#define INNER 0
+#define OUTER 1
+#define TABLE_SIZE 1048576 //2^20
 
 class Fib2584Ai
 {
@@ -25,19 +32,35 @@ public:
 	or define any variables you may need.
 	**********************************/
 private:
-    static void moveTile(MoveDirection,int [4][4]);
-    static void moveVertically(int [4][4], int, int);
-    static void moveHorizontally(int [4][4], int, int);
-    static void printBoard(int [4][4]);
+	class BoardFeature{
+	public:
+		BoardFeature(int [4][4], double);
+		double getBoardScore(double **);
+		
+		int outerFeature[4], innerFeature[4];
+		double mergeScore;
+		string boardString;
+		static void printTuple(int);
+	};
+    static int moveTile(MoveDirection,int [4][4]);
+    static int moveVertically(int [4][4], int, int);
+    static int moveHorizontally(int [4][4], int, int);
+    static string printBoard(int [4][4]);
     static bool isSame(int[4][4], int[4][4]);
-    static int getScore(int[4][4]);
-    static int getEmptyBlockCount(int[4][4]);
     static int getFibIndex(int);
-    static int getLongestSequence(int [4][4]);
-    static int getMergeCount(int [4][4]);
     static bool canMerge(int,int);
     static void copyBoard(int [4][4], int[4][4]);
-    static int getBorderAverage(int[4][4]);
+	static int reverseTuple(int);
+	static int getTupleIndex(int);
+	double runBackwardPropagation();
+	
+	double alpha;
+	int totalScore = 0;
+	double **valueTable;
+	//std::list<int> recordScore;
+	//std::list<string> recordBoard;
+	std::list<Fib2584Ai::BoardFeature> recordfeature;
 };
+
 
 #endif

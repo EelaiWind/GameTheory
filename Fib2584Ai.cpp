@@ -1,8 +1,35 @@
 #include "Fib2584Ai.h"
 
-
 Fib2584Ai::Fib2584Ai()
 {
+	totalScore = 0;
+	alpha = 0.002;
+	
+	valueTable = (double **)malloc(2*sizeof(double *)+2*TABLE_SIZE*sizeof(double));
+	int i ;
+	double *pData;
+	for (i = 0, pData = (double *)(valueTable+2); i < 2; i++, pData += TABLE_SIZE)
+		valueTable[i]=pData;
+	
+	FILE *file = fopen("valueTable.txt","r");
+	if (file == NULL){
+		file = fopen("valueTable.txt","w");
+		for (int i = 0 ; i < TABLE_SIZE ; i++){
+			if ( i <= reverseTuple(i))
+				fprintf(file,"%d 0 0\n",i);
+		}
+		fclose(file);
+	}
+	else{
+		int index,count = 0;
+		double outter,inner;
+		while(true){
+			count += 1;
+			if ( fscanf(file,"%d %lf %lf\n",&index, &outter, &inner) == EOF)
+				break;
+		}
+		fclose(file);
+	}
 }
 
 void Fib2584Ai::initialize(int argc, char* argv[])
@@ -14,34 +41,37 @@ void Fib2584Ai::initialize(int argc, char* argv[])
 
 MoveDirection Fib2584Ai::generateMove(int board[4][4])
 {
-    int nextBoard[4][4][4];
-    MoveDirection direction[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
-    char dir[][10] = {"UP", "DOWN", "LEFT", "RIGHT"};
-    int maxScore = -1;
-    int maxIndex = 0;
-
-    //printBoard(board);
-    for (int i = 0 ; i < 4 ; i++){
-        copyBoard(board,nextBoard[i]);
-        moveTile(direction[i],nextBoard[i]);
-
-        if ( !isSame(board,nextBoard[i])){
-            //printBoard(nextBoard[i]);
-            //printf("%s score = %d\n",dir[i],getScore(nextBoard[i]));
-            if ( maxScore < getScore(nextBoard[i]) ){
-                maxScore = getScore(nextBoard[i]);
-                maxIndex = i;
-            }
-        }
-    }
-
-	//MoveDirection randomMove = static_cast<MoveDirection>(rand() % 4);
-	//printf(">>%s\n",dir[maxIndex]);
-	return direction[maxIndex];
+	/** choose next direction*/
+    MoveDirection dir = static_cast<MoveDirection>(rand() % 4);
+	
+	int score = moveTile(dir,board);
+	totalScore += score;
+	BoardFeature feature(board, score);
+	recordfeature.push_back(feature);
+	
+	return dir;
 }
 
 void Fib2584Ai::gameOver(int board[4][4], int iScore)
-{
+{	
+	/** add dead board to the list*/
+	BoardFeature feature(board, 0);
+	recordfeature.push_back(feature);
+	
+	/*std::list<BoardFeature>::iterator iterFeature;
+	for (iterFeature = recordfeature.begin(); iterFeature != recordfeature.end() ; iterFeature++){
+		cout << iterFeature->score << endl;
+		cout << iterFeature->boardString << endl;
+		cout << "outer features" << endl;
+		for (int i = 0 ; i < 4 ; i++){
+			BoardFeature::printTuple(iterFeature->outerFeature[i]);
+		}
+		cout << "inner features" << endl;
+		for (int i = 0 ; i < 4 ; i++){
+			BoardFeature::printTuple(iterFeature->innerFeature[i]);
+		}
+	}*/
+	cout << "avg delta = " << runBackwardPropagation() << endl;
 	return;
 }
 
@@ -50,24 +80,29 @@ You can implement any additional functions
 you may need.
 **********************************/
 
-void Fib2584Ai::moveTile(MoveDirection moveDirection,int board[4][4]){
+/**
+	return movement score
+*/
+int Fib2584Ai::moveTile(MoveDirection moveDirection,int board[4][4]){
 
     if (moveDirection == MOVE_UP){
-        moveVertically(board,0,1);
+        return moveVertically(board,0,1);
     }
     else if (moveDirection == MOVE_DOWN){
-        moveVertically(board,3,-1);
+        return moveVertically(board,3,-1);
     }
     else if (moveDirection == MOVE_LEFT){
-        moveHorizontally(board, 0, 1);
+        return moveHorizontally(board, 0, 1);
     }
     else if (moveDirection == MOVE_RIGHT){
-        moveHorizontally(board, 3, -1);
+        return moveHorizontally(board, 3, -1);
     }
+	return 0;
 }
 
-void Fib2584Ai::moveVertically(int board[4][4], int start, int offset){
-    for (int col = 0 ; col < 4 ; col++){
+int Fib2584Ai::moveVertically(int board[4][4], int start, int offset){
+    int score = 0;
+	for (int col = 0 ; col < 4 ; col++){
         int preTile = 0;
         int preRow = start;
         bool preIsMerged = false;
@@ -84,6 +119,7 @@ void Fib2584Ai::moveVertically(int board[4][4], int start, int offset){
             else{
                 if ( canMerge(preTile,board[row][col]) && !preIsMerged){
                     preTile = preTile+board[row][col];
+					score += preTile;
                     board[row][col] = 0;
                     board[preRow][col] = preTile;
                     preIsMerged = true;
@@ -98,10 +134,12 @@ void Fib2584Ai::moveVertically(int board[4][4], int start, int offset){
             }
         }
     }
+	return score;
 }
 
-void Fib2584Ai::moveHorizontally(int board[4][4], int start, int offset){
-    for (int row = 0 ; row < 4 ; row++){
+int Fib2584Ai::moveHorizontally(int board[4][4], int start, int offset){
+    int score = 0;
+	for (int row = 0 ; row < 4 ; row++){
         int preTile = 0;
         int preCol = start;
         bool preIsMerged = false;
@@ -118,6 +156,7 @@ void Fib2584Ai::moveHorizontally(int board[4][4], int start, int offset){
             else{
                 if (canMerge(preTile,board[row][col]) && !preIsMerged){
                     preTile = preTile+board[row][col];
+					score += preTile;
                     board[row][col] = 0;
                     board[row][preCol] = preTile;
                     preIsMerged = true;
@@ -132,6 +171,7 @@ void Fib2584Ai::moveHorizontally(int board[4][4], int start, int offset){
             }
         }
     }
+	return score;
 }
 
 void Fib2584Ai::copyBoard(int oldBoard[4][4], int newBoard[4][4]){
@@ -142,15 +182,18 @@ void Fib2584Ai::copyBoard(int oldBoard[4][4], int newBoard[4][4]){
     }
 }
 
-void Fib2584Ai::printBoard(int board[4][4]){
+string Fib2584Ai::printBoard(int board[4][4]){
     int i,j;
-
+	string str;
+	char tmp[100];
     for (i = 0 ; i < 4 ; i++){
         for (j = 0 ; j < 4 ; j++){
-            printf("%5d",board[i][j]);
+            sprintf(tmp,"%5d",board[i][j]);
+			str += tmp;
         }
-        putchar('\n');
+        str += '\n';
     }
+	return str;
 }
 
 bool Fib2584Ai::canMerge(int num1,int num2){
@@ -174,76 +217,6 @@ bool Fib2584Ai::isSame(int board1[4][4], int board2[4][4]){
     return true;
 }
 
-int Fib2584Ai:: getScore(int board[4][4]){
-    return getEmptyBlockCount(board)*10000 + getMergeCount(board)*100 + (16-getBorderAverage(board));
-}
-
-int Fib2584Ai::getEmptyBlockCount(int board[4][4]){
-    int emptyCount = 0;
-    for (int i = 0 ; i < 4 ; i++){
-        for (int j = 0 ;  j < 4 ; j++){
-            if (board[i][j] == 0)
-                emptyCount += 1;
-        }
-    }
-    return emptyCount;
-}
-
-int Fib2584Ai::getLongestSequence(int board[4][4]){
-
-    int countUp[4][4];
-    int countDown[4][4];
-    int index[4][4];
-    int longestSequence = 1;
-
-    for (int i = 0 ; i < 4 ; i++){
-        for (int j = 0 ; j < 4 ; j++){
-            index[i][j] = getFibIndex(board[i][j]);
-            countUp[i][j] = 1;
-            countDown[i][j] = 1;
-        }
-    }
-
-    for (int i = 0 ; i < 4 ; i++){
-        for (int j = 0 ; j < 4 ; j++){
-            if (board[i][j] ==0)
-                continue;
-            /* top less than 1*/
-            if ( i>0 && index[i-1][j] != 0 && index[i-1][j] == index[i][j] - 2 ){
-                if (countDown[i][j] < countDown[i-1][j] +1)
-                    countDown[i][j] = countDown[i-1][j] +1;
-            }
-            /* left less than 1*/
-            if ( j>0 && index[i][j-1] != 0 && index[i][j-1] == index[i][j] - 2){
-                if (countDown[i][j] < countDown[i][j-1] +1)
-                    countDown[i][j] = countDown[i][j-1] +1;
-            }
-
-            /* top more than 1*/
-            if ( i>0 && index[i-1][j] != 0 && index[i-1][j] == index[i][j] + 2){
-                if (countUp[i][j] < countUp[i-1][j] +1)
-                    countUp[i][j] = countUp[i-1][j] +1;
-            }
-            /* left more than 1*/
-            if ( j>0 && index[i][j-1] != 0 && index[i][j-1] == index[i][j] + 2){
-                if (countUp[i][j] < countUp[i][j-1] +1)
-                    countUp[i][j] = countUp[i][j-1] +1;
-            }
-        }
-    }
-
-    for (int i = 0 ; i < 4 ; i++){
-        for (int j = 0 ; j < 4 ; j++){
-            if (longestSequence < countDown[i][j])
-                longestSequence = countDown[i][j];
-            if(longestSequence < countUp[i][j])
-                longestSequence = countUp[i][j];
-        }
-    }
-
-    return longestSequence;
-}
-
 int Fib2584Ai::getFibIndex(int number){
     for (int i = 0 ; i < 32 ; i++){
         if (number == GameBoard::fibonacci_[i])
@@ -254,45 +227,107 @@ int Fib2584Ai::getFibIndex(int number){
     return 0;
 }
 
-int Fib2584Ai::getMergeCount(int board[4][4]){
-    int countMerge = 0;
-    for (int i = 0 ; i < 4 ; i++){
-        for (int j = 0 ; j < 4 ; j++){
-            if ( i > 0 && canMerge(board[i][j],board[i-1][j]) )
-                countMerge += 1;
-            if ( j > 0 && canMerge(board[i][j], board[i][j-1]) )
-                countMerge += 1;
-        }
+int Fib2584Ai::reverseTuple(int tuple){
+    int mask = 0xf8000, offset = -15;
+    int i;
+    int result = 0;
+    for (i = 0 ; i < 4 ; i++){
+        if (offset < 0)
+            result |= (tuple&(mask)) >> -offset ;
+        else
+           result |= (tuple&(mask)) << offset ;
+        mask = mask >> 5;
+        offset += 10;
     }
-    return countMerge;
+    return result;
+}
+/**
+	tuple [1,5,6,3] and [3,6,5,1] are the same, and they are both mapped to the SMALLER one
+*/
+int Fib2584Ai::getTupleIndex(int tuple){
+	int reverse = reverseTuple(tuple);
+	return (tuple < reverse) ? tuple : reverse;
 }
 
-int Fib2584Ai::getBorderAverage(int board[4][4]){
-    int x[]={-1,1,0,0};
-    int y[]={0,0,-1,1};
+/**
+	update "valueTable"
+*/
+double Fib2584Ai::runBackwardPropagation(){
 
-    int sum = 0, countTile = 0;
+	double sum = 0;
+	int count =0;
+	bool isLast = true;
+	double preScore = 0;
+	
+	while (recordfeature.size() > 0){
+		BoardFeature thisFeature = recordfeature.back();
+		recordfeature.pop_back();
+		if (isLast){
+			isLast = false;
+			preScore = 0;
+		}
+		else{
+			double delta = alpha*(preScore - thisFeature.getBoardScore(valueTable));
+			sum += delta;
+			count += 1;
+			for (int i = 0 ; i < 4 ; i++){
+				valueTable[OUTER][thisFeature.outerFeature[i]] += delta;
+				valueTable[INNER][thisFeature.innerFeature[i]] += delta;
+			}
+			
+			preScore = thisFeature.mergeScore + thisFeature.getBoardScore(valueTable);
+		}
+	}
+	
+	return (count==0) ? 0 : sum/count;
+}
 
-    for (int i = 0 ; i < 4 ; i++){
-        for (int j = 0 ; j < 4 ; j++){
-            if (board[i][j] == 0)
-                continue;
-            for (int k = 0 ; k < 4 ; k++){
-                int nextX = i + x[k];
-                int nextY = j + y[k];
-                if ( nextX >= 0 && nextX < 4 && nextY >= 0 && nextY < 4){
-                    if (board[nextX][nextY] == 0){
-                        countTile += 1;
-                        sum += board[i][j];
-                        break;
-                    }
-                }
-            }
+Fib2584Ai::BoardFeature::BoardFeature(int board[4][4], double score){
+    const int outerIndex[4][4][2] ={
+        {{0,0},{0,1},{0,2},{0,3}},
+        {{3,0},{3,1},{3,2},{3,3}},
+        {{0,0},{1,0},{2,0},{3,0}},
+        {{0,3},{1,3},{2,3},{3,3}}
+    };
+
+    const int innerIndex[4][4][2] = {
+        {{1,0},{1,1},{1,2},{1,3}},
+        {{2,0},{2,1},{2,2},{2,3}},
+        {{0,1},{1,1},{2,1},{3,1}},
+        {{0,2},{1,2},{2,2},{3,2}}
+    };
+
+    for(int i = 0 ; i < 4 ; i++){
+        outerFeature[i] = 0;
+        innerFeature[i] = 0;
+        for (int j = 0 ; j < 4; j++){
+            outerFeature[i] += board[outerIndex[i][j][0]][outerIndex[i][j][1]] << (15-5*j);
+            innerFeature[i] += board[innerIndex[i][j][0]][innerIndex[i][j][1]] << (15-5*j);
         }
+        int reverse = reverseTuple(outerFeature[i]);
+        outerFeature[i] = (outerFeature[i] < reverse)? outerFeature[i] : reverse;
+        reverse = reverseTuple(innerFeature[i]);
+        innerFeature[i] = (innerFeature[i] < reverse)? innerFeature[i] : reverse;
     }
+	
+	mergeScore = score;
+	boardString = printBoard(board);
+}
 
-    if (countTile == 0)
-        return 0;
-    else
-        return sum/countTile;
+void Fib2584Ai::BoardFeature::printTuple(int tuple){
+    int i = 0;
+
+    for (i=0;i<4;i++){
+        printf("%d ",(tuple&0xf8000)>>15);
+        tuple = (tuple&0x07fff) << 5;
+    }
+    putchar('\n');
+}
+
+double Fib2584Ai::BoardFeature::getBoardScore(double **valueTable){
+	int score = 0;
+	for (int i = 0 ; i < 4 ; i++){
+		score += valueTable[OUTER][outerFeature[i]] + valueTable[INNER][innerFeature[i]];
+	}
+	return score;
 }
