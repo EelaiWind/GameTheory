@@ -14,4 +14,4 @@ class Fib2584Ai::BoardFeature{
 		static void printTuple(int);
 };
 
-#endif
+#endif // __BOARDFEATURE_H__

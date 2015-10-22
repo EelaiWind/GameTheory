@@ -15,6 +15,7 @@
 #define INNER 0
 #define OUTER 1
 #define TABLE_SIZE 1048576 //2^20
+#define WEIGHT_TABLE_FILE "valueTable.txt"
 
 class Fib2584Ai
 {
@@ -35,9 +36,8 @@ public:
 private:
 	class BoardFeature;
     static int moveTile(MoveDirection,int [4][4]);
-    static int moveVertically(int [4][4], int, int);
-    static int moveHorizontally(int [4][4], int, int);
-    static string printBoard(int [4][4]);
+    static int generateNextBoard(int [4][4], int, int, bool);
+    static string toString(int [4][4]);
     static bool isSame(int[4][4], int[4][4]);
     static int getFibIndex(int);
     static bool canMerge(int,int);
@@ -45,12 +45,12 @@ private:
 	static int reverseTuple(int);
 	static int getTupleIndex(int);
 	MoveDirection chooseNextDirection(int [4][4]);
-	void saveValueTable();
-	double runBackwardPropagation();
+	void saveweightTable();
+	double updateWeightTable();
 	
 	int countGame;
 	double alpha;
-	double **valueTable;
+	double **weightTable;
 	bool isTraining;
 	std::list<Fib2584Ai::BoardFeature> recordfeature;
 };

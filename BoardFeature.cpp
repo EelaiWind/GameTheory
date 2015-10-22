@@ -1,5 +1,32 @@
 #include "BoardFeature.h"
 
+
+/**
+	@constructor
+	@arg
+		board: 2D array of the game board
+		score: merge score 
+	
+	initial field of the object.
+	
+	according to symmetry and reversal, classify 8 4-tuples into 2 groups 
+	for every 4-tuple, choose smaller number as its index
+	
+	example: [6 2 13 5] and [5 13 2 6] are the same, choose 00101_01101_00010_00110 (5_13_2_6) as their index
+	
+	
+	4 outer 4-tuples 		4 inner 4-tuples
+	+-+-+-+-+               +-+-+-+-+
+	|*|*|*|*|			    | |o|o| |
+	+-+-+-+-+               +-+-+-+-+
+	|*| | |*|               |o|o|o|o|
+	+-+-+-+-+               +-+-+-+-+
+	|*| | |*|               |o|o|o|o|
+	+-+-+-+-+               +-+-+-+-+
+	|*|*|*|*|               | |o|o| |
+	+-+-+-+-+               +-+-+-+-+
+	
+*/
 Fib2584Ai::BoardFeature::BoardFeature(int board[4][4], int score){
     const int outerIndex[4][4][2] ={
         {{0,0},{0,1},{0,2},{0,3}},
@@ -29,7 +56,7 @@ Fib2584Ai::BoardFeature::BoardFeature(int board[4][4], int score){
     }
 	
 	mergeScore = score;
-	boardString = printBoard(board);
+	boardString = toString(board);
 }
 
 void Fib2584Ai::BoardFeature::printTuple(int tuple){
@@ -49,7 +76,9 @@ void Fib2584Ai::BoardFeature::printTuple(int tuple){
 	@return
 		score of the board
 		
-	
+	read the corresponding values in the value table and add them up
+	outer features stored in  valueTable[OUTER]
+	inner features stored in  valueTable[INNER]
 */
 double Fib2584Ai::BoardFeature::getBoardScore(double **valueTable){
 	int score = 0;

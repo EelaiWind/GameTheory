@@ -6,17 +6,17 @@ Fib2584Ai::Fib2584Ai()
 	isTraining= false;
 	countGame = 0;
 	
-	valueTable = new double*[2];
+	weightTable = new double*[2];
 	
 	for(int i = 0; i < 2; ++i)
-		valueTable[i] = new double[TABLE_SIZE];
+		weightTable[i] = new double[TABLE_SIZE];
 	
-	FILE *file = fopen("valueTable.txt","r");
+	FILE *file = fopen(WEIGHT_TABLE_FILE,"r");
 	if (file == NULL){
 		for (int i = 0 ; i < TABLE_SIZE ; i++){
 			if ( i <= reverseTuple(i)){
-				valueTable[OUTER][i] = 0;
-				valueTable[INNER][i] = 0;
+				weightTable[OUTER][i] = 0;
+				weightTable[INNER][i] = 0;
 			}
 		}
 	}
@@ -27,8 +27,8 @@ Fib2584Ai::Fib2584Ai()
 			count += 1;
 			if ( fscanf(file,"%d %lf %lf\n",&index, &outerWeight, &innerWeight) == EOF)
 				break;
-			valueTable[OUTER][index] = outerWeight;
-			valueTable[INNER][index] = innerWeight;
+			weightTable[OUTER][index] = outerWeight;
+			weightTable[INNER][index] = innerWeight;
 		}
 		fclose(file);
 	}
@@ -36,7 +36,7 @@ Fib2584Ai::Fib2584Ai()
 
 Fib2584Ai::~Fib2584Ai(){
 	if (isTraining)
-		saveValueTable();
+		saveweightTable();
 }
 
 void Fib2584Ai::initialize(int argc, char* argv[])
@@ -72,7 +72,7 @@ void Fib2584Ai::gameOver(int board[4][4], int iScore)
 		/** add dead board to the list*/
 		BoardFeature feature(board, 0);
 		recordfeature.push_back(feature);
-		cout << "count = "<< ++countGame <<", avg delta = " << runBackwardPropagation() << endl;
+		cout << "count = "<< ++countGame <<", avg delta = " << updateWeightTable() << endl;
 	}
 	return;
 }
@@ -83,54 +83,97 @@ you may need.
 **********************************/
 
 /**
-	return movement score
+	@arguments
+		moveDirection: next move direction
+		board: game board
+	@return 
+		merge score earned by this move
+		
+	this function will change the content of "board[4][4]"
 */
 int Fib2584Ai::moveTile(MoveDirection moveDirection,int board[4][4]){
 
     if (moveDirection == MOVE_UP){
-        return moveVertically(board,0,1);
+        return generateNextBoard(board,0,1,false);
     }
     else if (moveDirection == MOVE_DOWN){
-        return moveVertically(board,3,-1);
+        return generateNextBoard(board,3,-1,false);
     }
     else if (moveDirection == MOVE_LEFT){
-        return moveHorizontally(board, 0, 1);
+        return generateNextBoard(board, 0, 1,true);
     }
     else if (moveDirection == MOVE_RIGHT){
-        return moveHorizontally(board, 3, -1);
+        return generateNextBoard(board, 3, -1,true);
     }
 	return 0;
 }
 
-int Fib2584Ai::moveVertically(int board[4][4], int start, int offset){
+/**
+	@arguments
+		board: game board
+		start: start index
+		offset: increase or decrease index
+		isTransport: reverse game board by its diagonal
+	
+	@return
+		merge score earned by this move
+	
+	
+	this function will change the content of "board[4][4]"
+	
+	for UP and LEFT index should be 0,1,2,3 	(start = 0, offset = 1)
+	for DOWN and RIGHT index should be 3,2,1,0 	(start = 3, offset = -1)
+	
+	**NOTE**
+	this function only do column wise manipulation,
+	so be sure to transport the board if direction is LEFT or RIGHT
+*/
+int Fib2584Ai::generateNextBoard(int board[4][4], int start, int offset, bool isTransport){
     int score = 0;
+	int *tilePointer[4][4];
+	
+	if (isTransport){
+		for (int i = 0 ; i < 4;i++){
+			for ( int j = 0 ; j < 4 ; j++){
+				tilePointer[i][j] = &board[j][i];
+			}
+		}
+	}
+	else{
+		for (int i = 0 ; i < 4;i++){
+			for ( int j = 0 ; j < 4 ; j++){
+				tilePointer[i][j] = &board[i][j];
+			}
+		}
+	}
+	
 	for (int col = 0 ; col < 4 ; col++){
         int preTile = 0;
         int preRow = start;
         bool preIsMerged = false;
         for (int i = 0 ; i < 4 ; i++){
             int row = start + i*offset;
-            if (board[row][col] == 0)
+            if (*tilePointer[row][col] == 0)
                 continue;
 
             if (preTile == 0){
-                preTile = board[row][col];
-                board[row][col] = 0;
-                board[preRow][col] = preTile;
+                preTile = *tilePointer[row][col];
+                *tilePointer[row][col] = 0;
+                *tilePointer[preRow][col] = preTile;
             }
             else{
-                if ( canMerge(preTile,board[row][col]) && !preIsMerged){
-                    preTile = preTile+board[row][col];
+                if ( canMerge(preTile,*tilePointer[row][col]) && !preIsMerged){
+                    preTile = preTile + *tilePointer[row][col];
 					score += preTile;
-                    board[row][col] = 0;
-                    board[preRow][col] = preTile;
+                    *tilePointer[row][col] = 0;
+                    *tilePointer[preRow][col] = preTile;
                     preIsMerged = true;
                 }
                 else{
-                    preTile = board[row][col];
-                    board[row][col] = 0;
+                    preTile = *tilePointer[row][col];
+                    *tilePointer[row][col] = 0;
                     preRow += offset;
-                    board[preRow][col] = preTile;
+                    *tilePointer[preRow][col] = preTile;
                     preIsMerged = false;
                 }
             }
@@ -139,43 +182,13 @@ int Fib2584Ai::moveVertically(int board[4][4], int start, int offset){
 	return score;
 }
 
-int Fib2584Ai::moveHorizontally(int board[4][4], int start, int offset){
-    int score = 0;
-	for (int row = 0 ; row < 4 ; row++){
-        int preTile = 0;
-        int preCol = start;
-        bool preIsMerged = false;
-        for (int i = 0 ; i < 4 ; i++){
-            int col = start+ i*offset;
-            if (board[row][col] == 0)
-                continue;
-
-            if (preTile == 0){
-                preTile = board[row][col];
-                board[row][col] = 0;
-                board[row][preCol] = preTile;
-            }
-            else{
-                if (canMerge(preTile,board[row][col]) && !preIsMerged){
-                    preTile = preTile+board[row][col];
-					score += preTile;
-                    board[row][col] = 0;
-                    board[row][preCol] = preTile;
-                    preIsMerged = true;
-                }
-                else{
-                    preTile = board[row][col];
-                    board[row][col] = 0;
-                    preCol += offset;
-                    board[row][preCol] = preTile;
-                    preIsMerged = false;
-                }
-            }
-        }
-    }
-	return score;
-}
-
+/**
+	@arguments
+		oldBoard: board to be copied
+		newBoard: board where "oldBoard[4][4]" will be copied to 
+	
+	this function will modify the content of "newBoard[4][4]"
+*/
 void Fib2584Ai::copyBoard(int oldBoard[4][4], int newBoard[4][4]){
     for (int i = 0 ; i <4 ; i++){
         for (int j = 0 ; j < 4 ; j++){
@@ -184,7 +197,14 @@ void Fib2584Ai::copyBoard(int oldBoard[4][4], int newBoard[4][4]){
     }
 }
 
-string Fib2584Ai::printBoard(int board[4][4]){
+/**
+	@arguments
+		board: game board
+		
+	@return
+		a string representing the board
+*/
+string Fib2584Ai::toString(int board[4][4]){
     int i,j;
 	string str;
 	char tmp[100];
@@ -198,10 +218,18 @@ string Fib2584Ai::printBoard(int board[4][4]){
 	return str;
 }
 
-bool Fib2584Ai::canMerge(int num1,int num2){
-    if (num1 == 0 || num2 == 0)
+/**
+	@arguments
+		index1: tile index
+		index2: tile index
+	
+	@return
+		whether 2 tiles can merge into a bigger one
+*/
+bool Fib2584Ai::canMerge(int index1,int index2){
+    if (index1 == 0 || index2 == 0)
         return false;
-    int fib = num1 + num2;
+    int fib = index1 + index2;
     for (int i = 1 ; i < 32 ; i++){
         if (fib == GameBoard::fibonacci_[i])
             return true;
@@ -209,6 +237,14 @@ bool Fib2584Ai::canMerge(int num1,int num2){
     return false;
 }
 
+/**
+	@arguments
+		board1: game board1
+		board2: game board2
+	
+	@return 
+		whether 2 game board is exactly the same
+*/
 bool Fib2584Ai::isSame(int board1[4][4], int board2[4][4]){
     for (int i = 0 ; i < 4 ; i++){
         for (int j = 0 ; j < 4 ; j++){
@@ -219,6 +255,16 @@ bool Fib2584Ai::isSame(int board1[4][4], int board2[4][4]){
     return true;
 }
 
+/**
+	@arguments
+		number : a fib number
+	
+	@return
+		the index of that fib number
+	
+	@error
+		if "number" is not a fib number, program will halt
+*/
 int Fib2584Ai::getFibIndex(int number){
     for (int i = 0 ; i < 32 ; i++){
         if (number == GameBoard::fibonacci_[i])
@@ -229,6 +275,16 @@ int Fib2584Ai::getFibIndex(int number){
     return 0;
 }
 
+/**
+	@arguments
+		tuple: a number representing a 4-tuple
+	
+	@return
+		a number representing the reverse of "tuple"
+		
+	<example> 	[2,14,7,1] 				=> [1,7,14,2]
+				00010_01110_00111_00001 => 00001_00111_01110_00010
+*/
 int Fib2584Ai::reverseTuple(int tuple){
     int mask = 0xf8000, offset = -15;
     int i;
@@ -244,7 +300,16 @@ int Fib2584Ai::reverseTuple(int tuple){
     return result;
 }
 /**
-	tuple [1,5,6,3] and [3,6,5,1] are the same, and they are both mapped to the SMALLER one
+	@arguments
+		tuple: a number representing a 4-tuple
+	
+	@return
+		the index of the weight table corresponding to that 4-tuple
+	
+	for 2 symmetry 4-tuple, always map the smaller index 
+	
+	<example> 
+	tuple [1,5,6,3] and [3,6,5,1] are the same, and they are both mapped to the 00001_00101_00110_00011
 */
 int Fib2584Ai::getTupleIndex(int tuple){
 	int reverse = reverseTuple(tuple);
@@ -252,9 +317,17 @@ int Fib2584Ai::getTupleIndex(int tuple){
 }
 
 /**
-	update "valueTable"
+	@return
+		average delta during updating
+	
+	
+	update the weight according to the merge score from the back to the front
+	the "recordfeature" list will become empty after updating
+	
+	V(ST) = 0
+	delta = alpha * [ r' + V(S') - V(S)]
 */
-double Fib2584Ai::runBackwardPropagation(){
+double Fib2584Ai::updateWeightTable(){
 
 	double sum = 0;
 	int count =0;
@@ -269,16 +342,15 @@ double Fib2584Ai::runBackwardPropagation(){
 			preScore = 0;
 		}
 		else{
-			double delta = (preScore - thisFeature.getBoardScore(valueTable));
+			double delta = (preScore - thisFeature.getBoardScore(weightTable));
 			sum += delta;
 			delta *= alpha;
 			count += 1;
 			for (int i = 0 ; i < 4 ; i++){
-				valueTable[OUTER][thisFeature.outerFeature[i]] += delta;
-				valueTable[INNER][thisFeature.innerFeature[i]] += delta;
+				weightTable[OUTER][thisFeature.outerFeature[i]] += delta;
+				weightTable[INNER][thisFeature.innerFeature[i]] += delta;
 			}
-			
-			preScore = thisFeature.mergeScore + thisFeature.getBoardScore(valueTable);
+			preScore = thisFeature.mergeScore + thisFeature.getBoardScore(weightTable);
 		}
 	}
 	
@@ -286,12 +358,20 @@ double Fib2584Ai::runBackwardPropagation(){
 }
 
 /**
-	choose the next move direction based on the current board, this function also avoid
-	unchanged moves.
+	@arguments
+		board: game board
+	
+	@return
+		a direction which maximize the next board score
+		
+	this function will avoid unchanged moves
+	
+	**NOTE**
 	DON'T modified "board[4][4]" in this function. Instead, manipulate the copy of "board[4][4]"
 */
 MoveDirection Fib2584Ai::chooseNextDirection(int board[4][4]){
 	const MoveDirection dir[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
+	//const string dirString[] = {"MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"};
 	int maxScore = -2147483648, maxIndex = 0;
 	
 	for (int i = 0 ; i < 4 ; i++){
@@ -302,7 +382,7 @@ MoveDirection Fib2584Ai::chooseNextDirection(int board[4][4]){
 			continue;
 		}
 		BoardFeature nextFeature = BoardFeature(nextBoard,mergeScore);
-		int nextScore = nextFeature.mergeScore + nextFeature.getBoardScore(valueTable);
+		int nextScore = nextFeature.mergeScore + nextFeature.getBoardScore(weightTable);
 		if (maxScore < nextScore){
 			maxScore = nextScore;
 			maxIndex = i;
@@ -311,15 +391,16 @@ MoveDirection Fib2584Ai::chooseNextDirection(int board[4][4]){
 	
 	return dir[maxIndex];
 }
+
 /**
 	save feature weight to file;
 */
-void Fib2584Ai::saveValueTable(){
+void Fib2584Ai::saveweightTable(){
 	
-	FILE *file = fopen("valueTable.txt","w");
+	FILE *file = fopen(WEIGHT_TABLE_FILE,"w");
 	for (int i = 0 ; i < TABLE_SIZE ; i++){
 		if ( i <= reverseTuple(i))
-			fprintf(file,"%d %lf %lf\n",i, valueTable[OUTER][i], valueTable[INNER][i]);
+			fprintf(file,"%d %lf %lf\n",i, weightTable[OUTER][i], weightTable[INNER][i]);
 	}
 	fclose(file);
 }
