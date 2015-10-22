@@ -20,6 +20,7 @@ class Fib2584Ai
 {
 public:
 	Fib2584Ai();
+	~Fib2584Ai();
 	// initialize ai
 	void initialize(int argc, char* argv[]);
 	// generate one move
@@ -32,16 +33,7 @@ public:
 	or define any variables you may need.
 	**********************************/
 private:
-	class BoardFeature{
-	public:
-		BoardFeature(int [4][4], double);
-		double getBoardScore(double **);
-		
-		int outerFeature[4], innerFeature[4];
-		double mergeScore;
-		string boardString;
-		static void printTuple(int);
-	};
+	class BoardFeature;
     static int moveTile(MoveDirection,int [4][4]);
     static int moveVertically(int [4][4], int, int);
     static int moveHorizontally(int [4][4], int, int);
@@ -52,15 +44,16 @@ private:
     static void copyBoard(int [4][4], int[4][4]);
 	static int reverseTuple(int);
 	static int getTupleIndex(int);
+	MoveDirection chooseNextDirection(int [4][4]);
+	void saveValueTable();
 	double runBackwardPropagation();
 	
+	int countGame;
 	double alpha;
-	int totalScore = 0;
 	double **valueTable;
-	//std::list<int> recordScore;
-	//std::list<string> recordBoard;
+	bool isTraining;
 	std::list<Fib2584Ai::BoardFeature> recordfeature;
 };
-
+#include "BoardFeature.h"
 
 #endif

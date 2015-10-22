@@ -2,38 +2,52 @@
 
 Fib2584Ai::Fib2584Ai()
 {
-	totalScore = 0;
-	alpha = 0.002;
+	alpha = 0.0001;
+	isTraining= false;
+	countGame = 0;
 	
-	valueTable = (double **)malloc(2*sizeof(double *)+2*TABLE_SIZE*sizeof(double));
-	int i ;
-	double *pData;
-	for (i = 0, pData = (double *)(valueTable+2); i < 2; i++, pData += TABLE_SIZE)
-		valueTable[i]=pData;
+	valueTable = new double*[2];
+	
+	for(int i = 0; i < 2; ++i)
+		valueTable[i] = new double[TABLE_SIZE];
 	
 	FILE *file = fopen("valueTable.txt","r");
 	if (file == NULL){
-		file = fopen("valueTable.txt","w");
 		for (int i = 0 ; i < TABLE_SIZE ; i++){
-			if ( i <= reverseTuple(i))
-				fprintf(file,"%d 0 0\n",i);
+			if ( i <= reverseTuple(i)){
+				valueTable[OUTER][i] = 0;
+				valueTable[INNER][i] = 0;
+			}
 		}
-		fclose(file);
 	}
 	else{
 		int index,count = 0;
-		double outter,inner;
+		double outerWeight,innerWeight;
 		while(true){
 			count += 1;
-			if ( fscanf(file,"%d %lf %lf\n",&index, &outter, &inner) == EOF)
+			if ( fscanf(file,"%d %lf %lf\n",&index, &outerWeight, &innerWeight) == EOF)
 				break;
+			valueTable[OUTER][index] = outerWeight;
+			valueTable[INNER][index] = innerWeight;
 		}
 		fclose(file);
 	}
 }
 
+Fib2584Ai::~Fib2584Ai(){
+	if (isTraining)
+		saveValueTable();
+}
+
 void Fib2584Ai::initialize(int argc, char* argv[])
-{
+{	
+	double tmp;
+	if (argc >= 3 && sscanf(argv[2],"%lf",&tmp) == 1){
+		printf("Enable Training mode...\n");
+		isTraining = true;
+		printf("training rate = %lf\n",alpha);
+		alpha = tmp;
+	}
 	srand(time(NULL));
 	return;
 }
@@ -42,36 +56,24 @@ void Fib2584Ai::initialize(int argc, char* argv[])
 MoveDirection Fib2584Ai::generateMove(int board[4][4])
 {
 	/** choose next direction*/
-    MoveDirection dir = static_cast<MoveDirection>(rand() % 4);
+    MoveDirection dir = chooseNextDirection(board);
 	
 	int score = moveTile(dir,board);
-	totalScore += score;
-	BoardFeature feature(board, score);
-	recordfeature.push_back(feature);
-	
+	if (isTraining){
+		BoardFeature feature(board, score);
+		recordfeature.push_back(feature);
+	}
 	return dir;
 }
 
 void Fib2584Ai::gameOver(int board[4][4], int iScore)
 {	
-	/** add dead board to the list*/
-	BoardFeature feature(board, 0);
-	recordfeature.push_back(feature);
-	
-	/*std::list<BoardFeature>::iterator iterFeature;
-	for (iterFeature = recordfeature.begin(); iterFeature != recordfeature.end() ; iterFeature++){
-		cout << iterFeature->score << endl;
-		cout << iterFeature->boardString << endl;
-		cout << "outer features" << endl;
-		for (int i = 0 ; i < 4 ; i++){
-			BoardFeature::printTuple(iterFeature->outerFeature[i]);
-		}
-		cout << "inner features" << endl;
-		for (int i = 0 ; i < 4 ; i++){
-			BoardFeature::printTuple(iterFeature->innerFeature[i]);
-		}
-	}*/
-	cout << "avg delta = " << runBackwardPropagation() << endl;
+	if (isTraining){
+		/** add dead board to the list*/
+		BoardFeature feature(board, 0);
+		recordfeature.push_back(feature);
+		cout << "count = "<< ++countGame <<", avg delta = " << runBackwardPropagation() << endl;
+	}
 	return;
 }
 
@@ -267,8 +269,9 @@ double Fib2584Ai::runBackwardPropagation(){
 			preScore = 0;
 		}
 		else{
-			double delta = alpha*(preScore - thisFeature.getBoardScore(valueTable));
+			double delta = (preScore - thisFeature.getBoardScore(valueTable));
 			sum += delta;
+			delta *= alpha;
 			count += 1;
 			for (int i = 0 ; i < 4 ; i++){
 				valueTable[OUTER][thisFeature.outerFeature[i]] += delta;
@@ -282,52 +285,41 @@ double Fib2584Ai::runBackwardPropagation(){
 	return (count==0) ? 0 : sum/count;
 }
 
-Fib2584Ai::BoardFeature::BoardFeature(int board[4][4], double score){
-    const int outerIndex[4][4][2] ={
-        {{0,0},{0,1},{0,2},{0,3}},
-        {{3,0},{3,1},{3,2},{3,3}},
-        {{0,0},{1,0},{2,0},{3,0}},
-        {{0,3},{1,3},{2,3},{3,3}}
-    };
-
-    const int innerIndex[4][4][2] = {
-        {{1,0},{1,1},{1,2},{1,3}},
-        {{2,0},{2,1},{2,2},{2,3}},
-        {{0,1},{1,1},{2,1},{3,1}},
-        {{0,2},{1,2},{2,2},{3,2}}
-    };
-
-    for(int i = 0 ; i < 4 ; i++){
-        outerFeature[i] = 0;
-        innerFeature[i] = 0;
-        for (int j = 0 ; j < 4; j++){
-            outerFeature[i] += board[outerIndex[i][j][0]][outerIndex[i][j][1]] << (15-5*j);
-            innerFeature[i] += board[innerIndex[i][j][0]][innerIndex[i][j][1]] << (15-5*j);
-        }
-        int reverse = reverseTuple(outerFeature[i]);
-        outerFeature[i] = (outerFeature[i] < reverse)? outerFeature[i] : reverse;
-        reverse = reverseTuple(innerFeature[i]);
-        innerFeature[i] = (innerFeature[i] < reverse)? innerFeature[i] : reverse;
-    }
+/**
+	choose the next move direction based on the current board, this function also avoid
+	unchanged moves.
+	DON'T modified "board[4][4]" in this function. Instead, manipulate the copy of "board[4][4]"
+*/
+MoveDirection Fib2584Ai::chooseNextDirection(int board[4][4]){
+	const MoveDirection dir[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
+	int maxScore = -2147483648, maxIndex = 0;
 	
-	mergeScore = score;
-	boardString = printBoard(board);
-}
-
-void Fib2584Ai::BoardFeature::printTuple(int tuple){
-    int i = 0;
-
-    for (i=0;i<4;i++){
-        printf("%d ",(tuple&0xf8000)>>15);
-        tuple = (tuple&0x07fff) << 5;
-    }
-    putchar('\n');
-}
-
-double Fib2584Ai::BoardFeature::getBoardScore(double **valueTable){
-	int score = 0;
 	for (int i = 0 ; i < 4 ; i++){
-		score += valueTable[OUTER][outerFeature[i]] + valueTable[INNER][innerFeature[i]];
+		int nextBoard[4][4];
+		copyBoard(board,nextBoard);
+		int mergeScore = moveTile(dir[i],nextBoard);
+		if (isSame(nextBoard,board)){
+			continue;
+		}
+		BoardFeature nextFeature = BoardFeature(nextBoard,mergeScore);
+		int nextScore = nextFeature.mergeScore + nextFeature.getBoardScore(valueTable);
+		if (maxScore < nextScore){
+			maxScore = nextScore;
+			maxIndex = i;
+		}
 	}
-	return score;
+	
+	return dir[maxIndex];
+}
+/**
+	save feature weight to file;
+*/
+void Fib2584Ai::saveValueTable(){
+	
+	FILE *file = fopen("valueTable.txt","w");
+	for (int i = 0 ; i < TABLE_SIZE ; i++){
+		if ( i <= reverseTuple(i))
+			fprintf(file,"%d %lf %lf\n",i, valueTable[OUTER][i], valueTable[INNER][i]);
+	}
+	fclose(file);
 }
