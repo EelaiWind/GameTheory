@@ -46,8 +46,8 @@ Fib2584Ai::BoardFeature::BoardFeature(int board[4][4], int score){
         outerFeature[i] = 0;
         innerFeature[i] = 0;
         for (int j = 0 ; j < 4; j++){
-            outerFeature[i] += board[outerIndex[i][j][0]][outerIndex[i][j][1]] << (15-5*j);
-            innerFeature[i] += board[innerIndex[i][j][0]][innerIndex[i][j][1]] << (15-5*j);
+            outerFeature[i] += getFibIndex(board[outerIndex[i][j][0]][outerIndex[i][j][1]]) << (15-5*j);
+            innerFeature[i] += getFibIndex(board[innerIndex[i][j][0]][innerIndex[i][j][1]]) << (15-5*j);
         }
         int reverse = reverseTuple(outerFeature[i]);
         outerFeature[i] = (outerFeature[i] < reverse)? outerFeature[i] : reverse;

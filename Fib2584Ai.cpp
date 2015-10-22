@@ -61,6 +61,15 @@ MoveDirection Fib2584Ai::generateMove(int board[4][4])
 	int score = moveTile(dir,board);
 	if (isTraining){
 		BoardFeature feature(board, score);
+		/*cout << toString(board) << endl;
+		printf("Outer Feature:\n");
+		for (int i = 0 ; i < 4 ; i++){
+			feature.printTuple(feature.outerFeature[i]);
+		}
+		printf("Inner Feature:\n");
+		for (int i = 0 ; i < 4 ; i++){
+			feature.printTuple(feature.innerFeature[i]);
+		}*/
 		recordfeature.push_back(feature);
 	}
 	return dir;
@@ -382,7 +391,7 @@ MoveDirection Fib2584Ai::chooseNextDirection(int board[4][4]){
 			continue;
 		}
 		BoardFeature nextFeature = BoardFeature(nextBoard,mergeScore);
-		int nextScore = nextFeature.mergeScore + nextFeature.getBoardScore(weightTable);
+		int nextScore = nextFeature.getBoardScore(weightTable);
 		if (maxScore < nextScore){
 			maxScore = nextScore;
 			maxIndex = i;
