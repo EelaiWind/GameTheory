@@ -27,7 +27,7 @@
 	+-+-+-+-+               +-+-+-+-+
 	
 */
-Fib2584Ai::BoardFeature::BoardFeature(int board[4][4], int score){
+Fib2584Ai::BoardFeature::BoardFeature(const int board[4][4], int score){
     const int outerIndex[4][4][2] ={
         {{0,0},{0,1},{0,2},{0,3}},
         {{3,0},{3,1},{3,2},{3,3}},
@@ -55,6 +55,11 @@ Fib2584Ai::BoardFeature::BoardFeature(int board[4][4], int score){
         innerFeature[i] = (innerFeature[i] < reverse)? innerFeature[i] : reverse;
     }
 	
+	if (IGNORE)
+		extraFeature = 0;
+	else
+		extraFeature = getExtraFeature(board);
+	
 	mergeScore = score;
 	boardString = toString(board);
 }
@@ -80,10 +85,77 @@ void Fib2584Ai::BoardFeature::printTuple(int tuple){
 	outer features stored in  valueTable[OUTER]
 	inner features stored in  valueTable[INNER]
 */
-double Fib2584Ai::BoardFeature::getBoardScore(double **valueTable){
+double Fib2584Ai::BoardFeature::getBoardScore(const double *const* valueTable,double const*extraTable){
 	int score = 0;
 	for (int i = 0 ; i < 4 ; i++){
 		score += valueTable[OUTER][outerFeature[i]] + valueTable[INNER][innerFeature[i]];
 	}
+	
+	if (!IGNORE)
+		score += extraTable[extraFeature];
+	
 	return score;
+}
+
+int Fib2584Ai::BoardFeature::getExtraFeature(const int board[4][4]){
+	
+	int maxTile = 0, emptyCount = 0, mergeCount =  0, longestSequence = 0;
+	int index[4][4];
+	
+	for (int i = 0 ; i < 4 ; i++){
+		for (int j = 0 ; j < 4 ; j++){
+			index[i][j] = getFibIndex(board[i][j]);
+			if ( maxTile < board[i][j] ){
+				maxTile = board[i][j];
+			}
+			
+			if (board[i][j] == 0){
+				emptyCount += 1;
+			}
+			
+			if ( i+1 < 3 && canMerge(board[i][j],board[i+1][j])){
+				mergeCount += 1;	
+			}
+			
+			if ( j+1 < 3 && canMerge(board[i][j],board[i][j+1])){
+				mergeCount += 1;	
+			}
+		}
+	}
+	
+	for (int i = 0 ; i < 4 ; i++){
+		for (int j = 0 ; j < 4; j ++){
+			if (board[i][j] == maxTile){
+				int tmp = getSequenceLength(index,i,j);
+				if (longestSequence < tmp)
+					longestSequence = tmp;
+			}
+		}
+	}
+	
+	int fibIndex = getFibIndex(maxTile);
+	return   fibIndex << 13 | mergeCount << 8 | emptyCount << 4 | longestSequence;
+}
+
+int Fib2584Ai::BoardFeature::getSequenceLength(const int index[4][4], int row, int col){
+	const int deltaRow[] = {-1,1,0,0};
+	const int deltaCol[] = {0,0,-1,1};
+
+	int maxLength = 0;
+	
+	for (int i = 0 ; i < 4 ; i++){
+        int nextRow = row+deltaRow[i];
+        int nextCol = col+deltaCol[i];
+        if ( index[row][col] > 0 && nextRow >= 0 && nextRow < 4 && nextCol >= 0 && nextCol < 4){
+            if ( index[nextRow][nextCol] == 0 && maxLength < 1){
+                maxLength = 1;
+            }
+            else if (index[row][col] == index[nextRow][nextCol]+2){
+                int tmp = getSequenceLength(index,nextRow,nextCol);
+                if ( tmp > 0 && maxLength < 1+tmp)
+                    maxLength = 1+tmp;
+            }
+        }
+	}
+	return maxLength;
 }

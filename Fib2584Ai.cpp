@@ -9,11 +9,11 @@ Fib2584Ai::Fib2584Ai()
 	weightTable = new double*[2];
 	
 	for(int i = 0; i < 2; ++i)
-		weightTable[i] = new double[TABLE_SIZE];
+		weightTable[i] = new double[WEIGHT_TABLE_SIZE];
 	
 	FILE *file = fopen(WEIGHT_TABLE_FILE,"r");
 	if (file == NULL){
-		for (int i = 0 ; i < TABLE_SIZE ; i++){
+		for (int i = 0 ; i < WEIGHT_TABLE_SIZE ; i++){
 			if ( i <= reverseTuple(i)){
 				weightTable[OUTER][i] = 0;
 				weightTable[INNER][i] = 0;
@@ -21,14 +21,31 @@ Fib2584Ai::Fib2584Ai()
 		}
 	}
 	else{
-		int index,count = 0;
+		int index;
 		double outerWeight,innerWeight;
 		while(true){
-			count += 1;
 			if ( fscanf(file,"%d %lf %lf\n",&index, &outerWeight, &innerWeight) == EOF)
 				break;
 			weightTable[OUTER][index] = outerWeight;
 			weightTable[INNER][index] = innerWeight;
+		}
+		fclose(file);
+	}
+	
+	extraTable = new double[EXTRA_TABLE_SIZE];
+	file = fopen(EXTRA_TABLE_FILE,"r");
+	if (file == NULL){
+		for (int i = 0 ; i < EXTRA_TABLE_SIZE ; i++){
+			extraTable[i] = 0;
+		}
+	}
+	else{
+		int index;
+		double weight;
+		while(true){
+			if ( fscanf(file,"%d %lf\n",&index, &weight) == EOF)
+				break;
+			extraTable[index] = weight;
 		}
 		fclose(file);
 	}
@@ -59,10 +76,11 @@ MoveDirection Fib2584Ai::generateMove(int board[4][4])
     MoveDirection dir = chooseNextDirection(board);
 	
 	int score = moveTile(dir,board);
+	
 	if (isTraining){
 		BoardFeature feature(board, score);
-		/*cout << toString(board) << endl;
-		printf("Outer Feature:\n");
+		
+		/*printf("Outer Feature:\n");
 		for (int i = 0 ; i < 4 ; i++){
 			feature.printTuple(feature.outerFeature[i]);
 		}
@@ -83,6 +101,8 @@ void Fib2584Ai::gameOver(int board[4][4], int iScore)
 		recordfeature.push_back(feature);
 		cout << "count = "<< ++countGame <<", avg delta = " << updateWeightTable() << endl;
 	}
+	if (IGNORE)
+			printf("### IGNORE is true !###\n");
 	return;
 }
 
@@ -198,7 +218,7 @@ int Fib2584Ai::generateNextBoard(int board[4][4], int start, int offset, bool is
 	
 	this function will modify the content of "newBoard[4][4]"
 */
-void Fib2584Ai::copyBoard(int oldBoard[4][4], int newBoard[4][4]){
+void Fib2584Ai::copyBoard(const int oldBoard[4][4], int newBoard[4][4]){
     for (int i = 0 ; i <4 ; i++){
         for (int j = 0 ; j < 4 ; j++){
             newBoard[i][j] = oldBoard[i][j];
@@ -213,7 +233,7 @@ void Fib2584Ai::copyBoard(int oldBoard[4][4], int newBoard[4][4]){
 	@return
 		a string representing the board
 */
-string Fib2584Ai::toString(int board[4][4]){
+string Fib2584Ai::toString(const int board[4][4]){
     int i,j;
 	string str;
 	char tmp[100];
@@ -254,7 +274,7 @@ bool Fib2584Ai::canMerge(int index1,int index2){
 	@return 
 		whether 2 game board is exactly the same
 */
-bool Fib2584Ai::isSame(int board1[4][4], int board2[4][4]){
+bool Fib2584Ai::isSame(const int board1[4][4],const int board2[4][4]){
     for (int i = 0 ; i < 4 ; i++){
         for (int j = 0 ; j < 4 ; j++){
             if (board1[i][j] != board2[i][j])
@@ -351,7 +371,7 @@ double Fib2584Ai::updateWeightTable(){
 			preScore = 0;
 		}
 		else{
-			double delta = (preScore - thisFeature.getBoardScore(weightTable));
+			double delta = (preScore - thisFeature.getBoardScore(weightTable,extraTable));
 			sum += delta;
 			delta *= alpha;
 			count += 1;
@@ -359,7 +379,10 @@ double Fib2584Ai::updateWeightTable(){
 				weightTable[OUTER][thisFeature.outerFeature[i]] += delta;
 				weightTable[INNER][thisFeature.innerFeature[i]] += delta;
 			}
-			preScore = thisFeature.mergeScore + thisFeature.getBoardScore(weightTable);
+			if (!IGNORE){
+				extraTable[thisFeature.extraFeature] += delta;
+			}
+			preScore = thisFeature.mergeScore + thisFeature.getBoardScore(weightTable,extraTable);
 		}
 	}
 	
@@ -378,7 +401,7 @@ double Fib2584Ai::updateWeightTable(){
 	**NOTE**
 	DON'T modified "board[4][4]" in this function. Instead, manipulate the copy of "board[4][4]"
 */
-MoveDirection Fib2584Ai::chooseNextDirection(int board[4][4]){
+MoveDirection Fib2584Ai::chooseNextDirection(const int board[4][4]){
 	const MoveDirection dir[] = {MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT};
 	//const string dirString[] = {"MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"};
 	int maxScore = -2147483648, maxIndex = 0;
@@ -391,7 +414,7 @@ MoveDirection Fib2584Ai::chooseNextDirection(int board[4][4]){
 			continue;
 		}
 		BoardFeature nextFeature = BoardFeature(nextBoard,mergeScore);
-		int nextScore = nextFeature.getBoardScore(weightTable);
+		int nextScore = nextFeature.getBoardScore(weightTable,extraTable);
 		if (maxScore < nextScore){
 			maxScore = nextScore;
 			maxIndex = i;
@@ -407,9 +430,16 @@ MoveDirection Fib2584Ai::chooseNextDirection(int board[4][4]){
 void Fib2584Ai::saveweightTable(){
 	
 	FILE *file = fopen(WEIGHT_TABLE_FILE,"w");
-	for (int i = 0 ; i < TABLE_SIZE ; i++){
+	for (int i = 0 ; i < WEIGHT_TABLE_SIZE ; i++){
 		if ( i <= reverseTuple(i))
 			fprintf(file,"%d %lf %lf\n",i, weightTable[OUTER][i], weightTable[INNER][i]);
 	}
 	fclose(file);
+	
+	file = fopen(EXTRA_TABLE_FILE,"w");
+	for (int i = 0 ; i < EXTRA_TABLE_SIZE ; i++){
+		fprintf(file,"%d %lf\n",i, extraTable[i]);
+	}
+	fclose(file);
 }
+

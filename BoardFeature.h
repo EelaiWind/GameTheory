@@ -3,15 +3,22 @@
 
 #include "Fib2584Ai.h"
 
+#define IGNORE false
+
 class Fib2584Ai::BoardFeature{
 	public:
-		BoardFeature(int [4][4], int);
-		double getBoardScore(double **);
+		BoardFeature(const int [4][4], int);
+		double getBoardScore( const double *const *, double const *);
 		
 		int outerFeature[4], innerFeature[4];
-		double mergeScore;
+		int extraFeature;
+		int mergeScore;
 		string boardString;
 		static void printTuple(int);
+	
+	private:
+		int getExtraFeature(const int[4][4]);
+		int getSequenceLength(const int [4][4], int, int);
 };
 
 #endif // __BOARDFEATURE_H__
