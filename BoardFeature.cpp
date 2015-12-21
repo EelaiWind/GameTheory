@@ -1,58 +1,45 @@
 #include "BoardFeature.h"
 
+const short Fib2584Ai::BoardFeature::outer_axe_index[8][6] = {{12,8,4,0,1,5},{0,1,2,3,7,6},{3,7,11,15,14,10},{15,14,13,12,8,9},{0,4,8,12,13,9},{12,13,14,15,11,10},{15,11,7,3,2,6},{3,2,1,0,4,5}};
+const short Fib2584Ai::BoardFeature::inner_axe_index[8][6] = {{13,9,5,1,2,6},{4,5,6,7,11,10},{2,6,10,14,13,9},{11,10,9,8,4,5},{1,5,9,13,14,10},{8,9,10,11,7,6},{14,10,6,2,1,5},{7,6,5,4,8,9}};
+const short Fib2584Ai::BoardFeature::corner_rect_index[8][6] = {{0,1,2,6,5,4},{0,4,8,9,5,1},{3,2,1,5,6,7},{3,7,11,10,6,2},{12,8,4,5,9,13},{12,13,14,10,9,8},{15,11,7,6,10,14},{15,14,13,9,10,11}};
+const short Fib2584Ai::BoardFeature::center_rect_index[8][6] = {{1,5,9,2,6,10},{13,9,5,14,10,6},{4,5,6,8,9,10},{7,6,5,11,10,9}};
+const int Fib2584Ai::BoardFeature::tupleOffset[6] = {1,20,400,8000,160000,3200000};
 
-/**
-	@constructor
-	@arg
-		board: 2D array of the game board
-		score: merge score 
-	
-	initial field of the object.
-	
-	according to symmetry and reversal, classify 8 4-tuples into 2 groups 
-	for every 4-tuple, choose smaller number as its index
-	
-	example: [6 2 13 5] and [5 13 2 6] are the same, choose 00101_01101_00010_00110 (5_13_2_6) as their index
-	
-	
-	4 outer 4-tuples 		4 inner 4-tuples
-	+-+-+-+-+               +-+-+-+-+
-	|*|*|*|*|			    | |o|o| |
-	+-+-+-+-+               +-+-+-+-+
-	|*| | |*|               |o|o|o|o|
-	+-+-+-+-+               +-+-+-+-+
-	|*| | |*|               |o|o|o|o|
-	+-+-+-+-+               +-+-+-+-+
-	|*|*|*|*|               | |o|o| |
-	+-+-+-+-+               +-+-+-+-+
-	
-*/
 Fib2584Ai::BoardFeature::BoardFeature(const int board[4][4], int score){
-    const int outerIndex[4][4][2] ={
-        {{0,0},{0,1},{0,2},{0,3}},
-        {{3,0},{3,1},{3,2},{3,3}},
-        {{0,0},{1,0},{2,0},{3,0}},
-        {{0,3},{1,3},{2,3},{3,3}}
-    };
+    int i,j;
+    int lineBoard[16];
 
-    const int innerIndex[4][4][2] = {
-        {{1,0},{1,1},{1,2},{1,3}},
-        {{2,0},{2,1},{2,2},{2,3}},
-        {{0,1},{1,1},{2,1},{3,1}},
-        {{0,2},{1,2},{2,2},{3,2}}
-    };
-
-    for(int i = 0 ; i < 4 ; i++){
-        outerFeature[i] = 0;
-        innerFeature[i] = 0;
-        for (int j = 0 ; j < 4; j++){
-            outerFeature[i] += getFibIndex(board[outerIndex[i][j][0]][outerIndex[i][j][1]]) << (15-5*j);
-            innerFeature[i] += getFibIndex(board[innerIndex[i][j][0]][innerIndex[i][j][1]]) << (15-5*j);
+    mergeScore = score;
+    for (i=0;i<4;i++){
+        for(j=0;j<4;j++){
+            lineBoard[i*4+j] = getFibIndex(board[i][j]);
         }
-        int reverse = reverseTuple(outerFeature[i]);
-        outerFeature[i] = (outerFeature[i] < reverse)? outerFeature[i] : reverse;
-        reverse = reverseTuple(innerFeature[i]);
-        innerFeature[i] = (innerFeature[i] < reverse)? innerFeature[i] : reverse;
+    }
+    for (i=0;i<8;i++){
+        outer_axe_feature[i] = 0;
+        inner_axe_feature[i] = 0;
+        corner_rect_feature[i] = 0;
+        for (j=0;j<6;j++){
+            outer_axe_feature[i] += lineBoard[ outer_axe_index[i][j] ]*tupleOffset[j];
+            inner_axe_feature[i] += lineBoard[ inner_axe_index[i][j] ]*tupleOffset[j];
+            corner_rect_feature[i] += lineBoard[ corner_rect_index[i][j] ]*tupleOffset[j];
+        }
+    }
+
+    for (i=0;i<4;i++){
+        int tmp1 = 0 , tmp2 = 0;
+        for (j=0;j<3;j++){
+            tmp1 += lineBoard[ center_rect_index[i][j] ]*tupleOffset[j];
+            tmp2 += lineBoard[ center_rect_index[i][j+3] ]*tupleOffset[j];
+        }
+        /*處理對稱性*/
+        if (tmp1 <= tmp2){
+            center_rect_feature[i] = tmp1*tupleOffset[3] + tmp2;
+        }
+        else{
+            center_rect_feature[i] = tmp2*tupleOffset[3] + tmp1;
+        }
     }
 	
 	if (IGNORE)
@@ -61,34 +48,17 @@ Fib2584Ai::BoardFeature::BoardFeature(const int board[4][4], int score){
 		extraFeature = getExtraFeature(board);
 	
 	mergeScore = score;
-	boardString = toString(board);
 }
 
-void Fib2584Ai::BoardFeature::printTuple(int tuple){
-    int i = 0;
+float Fib2584Ai::BoardFeature::getBoardScore(float const *outer_axe_table, float const *inner_axe_table, float const *corner_rect_table, float const *center_rect_table, float const *extraTable){
+	
+	float score = 0;
+	for (int i = 0 ; i < 8 ; i++){
+		score += outer_axe_table[outer_axe_feature[i]] + inner_axe_table[inner_axe_feature[i]] + corner_rect_table[corner_rect_feature[i]];
+	}
 
-    for (i=0;i<4;i++){
-        printf("%d ",(tuple&0xf8000)>>15);
-        tuple = (tuple&0x07fff) << 5;
-    }
-    putchar('\n');
-}
-
-/**
-	@arg
-		valueTable: 2D array of feature weight
-		
-	@return
-		score of the board
-		
-	read the corresponding values in the value table and add them up
-	outer features stored in  valueTable[OUTER]
-	inner features stored in  valueTable[INNER]
-*/
-double Fib2584Ai::BoardFeature::getBoardScore(const double *const* valueTable,double const*extraTable){
-	int score = 0;
-	for (int i = 0 ; i < 4 ; i++){
-		score += valueTable[OUTER][outerFeature[i]] + valueTable[INNER][innerFeature[i]];
+	for (int i = 0 ;  i< 4 ; i++){
+		score += center_rect_table[center_rect_feature[i]];
 	}
 	
 	if (!IGNORE)

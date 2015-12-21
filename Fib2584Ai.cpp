@@ -6,49 +6,71 @@ Fib2584Ai::Fib2584Ai()
 	isTraining= false;
 	countGame = 0;
 	
-	weightTable = new double*[2];
+	outer_axe_table = new float[WEIGHT_TABLE_SIZE];
+	inner_axe_table = new float[WEIGHT_TABLE_SIZE];
+	corner_rect_table = new float[WEIGHT_TABLE_SIZE];
+	center_rect_table = new float[WEIGHT_TABLE_SIZE];
+	extra_table = new float[EXTRA_TABLE_SIZE];
 	
-	for(int i = 0; i < 2; ++i)
-		weightTable[i] = new double[WEIGHT_TABLE_SIZE];
-	
-	FILE *file = fopen(WEIGHT_TABLE_FILE,"r");
+	printf("loading weight table...");
+	FILE *file = fopen(OUTER_AXE_TABLE_FILE,"rb");
 	if (file == NULL){
 		for (int i = 0 ; i < WEIGHT_TABLE_SIZE ; i++){
-			if ( i <= reverseTuple(i)){
-				weightTable[OUTER][i] = 0;
-				weightTable[INNER][i] = 0;
-			}
+			outer_axe_table[i] = 0;
 		}
 	}
 	else{
-		int index;
-		double outerWeight,innerWeight;
-		while(true){
-			if ( fscanf(file,"%d %lf %lf\n",&index, &outerWeight, &innerWeight) == EOF)
-				break;
-			weightTable[OUTER][index] = outerWeight;
-			weightTable[INNER][index] = innerWeight;
-		}
-		fclose(file);
+		fread(outer_axe_table, sizeof(float), WEIGHT_TABLE_SIZE, file);
 	}
-	
-	extraTable = new double[EXTRA_TABLE_SIZE];
-	file = fopen(EXTRA_TABLE_FILE,"r");
+	fclose(file);
+
+	file = fopen(INNER_AXE_TABLE_FILE,"rb");
+	if (file == NULL){
+		for (int i = 0 ; i < WEIGHT_TABLE_SIZE ; i++){
+			inner_axe_table[i] = 0;
+		}
+	}
+	else{
+		fread(inner_axe_table, sizeof(float), WEIGHT_TABLE_SIZE, file);
+	}
+	fclose(file);
+
+	file = fopen(CORNER_RECT_TABLE_FILE,"rb");
+	if (file == NULL){
+		for (int i = 0 ; i < WEIGHT_TABLE_SIZE ; i++){
+			corner_rect_table[i] = 0;
+		}
+	}
+	else{
+		fread(corner_rect_table, sizeof(float), WEIGHT_TABLE_SIZE, file);
+	}
+	fclose(file);
+
+	file = fopen(CENTER_RECT_TABLE_FILE,"rb");
+	if (file == NULL){
+		for (int i = 0 ; i < WEIGHT_TABLE_SIZE ; i++){
+			center_rect_table[i] = 0;
+		}
+	}
+	else{
+		fread(center_rect_table, sizeof(float), WEIGHT_TABLE_SIZE, file);
+	}
+	fclose(file);
+
+	printf("[finish]\n");
+
+	printf("loading extra table...");
+	file = fopen(EXTRA_TABLE_FILE,"rb");
 	if (file == NULL){
 		for (int i = 0 ; i < EXTRA_TABLE_SIZE ; i++){
-			extraTable[i] = 0;
+			extra_table[i] = 0;
 		}
 	}
 	else{
-		int index;
-		double weight;
-		while(true){
-			if ( fscanf(file,"%d %lf\n",&index, &weight) == EOF)
-				break;
-			extraTable[index] = weight;
-		}
-		fclose(file);
+		fread(extra_table, sizeof(float), EXTRA_TABLE_SIZE, file);
 	}
+	fclose(file);
+	printf("[finish]\n");
 }
 
 Fib2584Ai::~Fib2584Ai(){
@@ -78,17 +100,14 @@ MoveDirection Fib2584Ai::generateMove(int board[4][4])
 	int score = moveTile(dir,board);
 	
 	if (isTraining){
-		BoardFeature feature(board, score);
-		
-		/*printf("Outer Feature:\n");
-		for (int i = 0 ; i < 4 ; i++){
-			feature.printTuple(feature.outerFeature[i]);
+		try {
+			BoardFeature feature(board, score);
+			recordfeature.push_back(feature);
 		}
-		printf("Inner Feature:\n");
-		for (int i = 0 ; i < 4 ; i++){
-			feature.printTuple(feature.innerFeature[i]);
-		}*/
-		recordfeature.push_back(feature);
+		catch (std::exception &e){
+			std::cerr << "error:" << e.what()<<endl;
+			exit(1);
+		}
 	}
 	return dir;
 }
@@ -96,10 +115,19 @@ MoveDirection Fib2584Ai::generateMove(int board[4][4])
 void Fib2584Ai::gameOver(int board[4][4], int iScore)
 {	
 	if (isTraining){
-		/** add dead board to the list*/
+		// add dead board to the list
 		BoardFeature feature(board, 0);
 		recordfeature.push_back(feature);
-		cout << "count = "<< ++countGame <<", avg delta = " << updateWeightTable() << endl;
+
+		updateWeightTable();
+		countGame+=1;
+		if (countGame % 100 == 0){
+			printf("%d\n",countGame);
+		}
+		
+		if (countGame%100000 == 0){	
+			saveweightTable();
+		}
 	}
 	if (IGNORE)
 			printf("### IGNORE is true !###\n");
@@ -295,13 +323,13 @@ bool Fib2584Ai::isSame(const int board1[4][4],const int board2[4][4]){
 		if "number" is not a fib number, program will halt
 */
 int Fib2584Ai::getFibIndex(int number){
-    for (int i = 0 ; i < 32 ; i++){
+    for (int i = 0 ; i < 20 ; i++){
         if (number == GameBoard::fibonacci_[i])
             return i;
     }
-    printf("Invalid Fib number : %d\n",number);
-    exit(1);
-    return 0;
+    //printf("Invalid Fib number : %d\n",number);
+    //exit(1);
+    return 19;
 }
 
 /**
@@ -356,12 +384,12 @@ int Fib2584Ai::getTupleIndex(int tuple){
 	V(ST) = 0
 	delta = alpha * [ r' + V(S') - V(S)]
 */
-double Fib2584Ai::updateWeightTable(){
+float Fib2584Ai::updateWeightTable(){
 
-	double sum = 0;
+	float sum = 0;
 	int count =0;
 	bool isLast = true;
-	double preScore = 0;
+	float preScore = 0;
 	
 	while (recordfeature.size() > 0){
 		BoardFeature thisFeature = recordfeature.back();
@@ -371,20 +399,25 @@ double Fib2584Ai::updateWeightTable(){
 			preScore = 0;
 		}
 		else{
-			double delta = (preScore - thisFeature.getBoardScore(weightTable,extraTable));
+			float delta = preScore - thisFeature.getBoardScore(outer_axe_table, inner_axe_table, corner_rect_table, center_rect_table, extra_table);
 			sum += delta;
 			delta *= alpha;
 			count += 1;
-			for (int i = 0 ; i < 4 ; i++){
-				weightTable[OUTER][thisFeature.outerFeature[i]] += delta;
-				weightTable[INNER][thisFeature.innerFeature[i]] += delta;
+			for (int i = 0 ; i < 8 ; i++){
+				outer_axe_table[thisFeature.outer_axe_feature[i]] += delta;
+				inner_axe_table[thisFeature.inner_axe_feature[i]] += delta;
+				corner_rect_table[thisFeature.corner_rect_feature[i]] += delta;
+			}
+			for (int i=0; i < 4 ; i++){
+				center_rect_table[thisFeature.center_rect_feature[i]] += delta;
 			}
 			if (!IGNORE){
-				extraTable[thisFeature.extraFeature] += delta;
+				extra_table[thisFeature.extraFeature] += delta;
 			}
-			preScore = thisFeature.mergeScore + thisFeature.getBoardScore(weightTable,extraTable);
+			preScore = thisFeature.mergeScore + thisFeature.getBoardScore(outer_axe_table, inner_axe_table, corner_rect_table, center_rect_table, extra_table);
 		}
 	}
+	
 	
 	return (count==0) ? 0 : sum/count;
 }
@@ -414,7 +447,7 @@ MoveDirection Fib2584Ai::chooseNextDirection(const int board[4][4]){
 			continue;
 		}
 		BoardFeature nextFeature = BoardFeature(nextBoard,mergeScore);
-		int nextScore = nextFeature.getBoardScore(weightTable,extraTable);
+		int nextScore = nextFeature.getBoardScore(outer_axe_table, inner_axe_table, corner_rect_table, center_rect_table, extra_table);
 		if (maxScore < nextScore){
 			maxScore = nextScore;
 			maxIndex = i;
@@ -429,17 +462,26 @@ MoveDirection Fib2584Ai::chooseNextDirection(const int board[4][4]){
 */
 void Fib2584Ai::saveweightTable(){
 	
-	FILE *file = fopen(WEIGHT_TABLE_FILE,"w");
-	for (int i = 0 ; i < WEIGHT_TABLE_SIZE ; i++){
-		if ( i <= reverseTuple(i))
-			fprintf(file,"%d %lf %lf\n",i, weightTable[OUTER][i], weightTable[INNER][i]);
-	}
+	printf("saving weight tables...");
+	FILE *file = fopen(OUTER_AXE_TABLE_FILE,"wb");
+	fwrite(outer_axe_table, sizeof(float), WEIGHT_TABLE_SIZE, file);
 	fclose(file);
 	
-	file = fopen(EXTRA_TABLE_FILE,"w");
-	for (int i = 0 ; i < EXTRA_TABLE_SIZE ; i++){
-		fprintf(file,"%d %lf\n",i, extraTable[i]);
-	}
+	file = fopen(INNER_AXE_TABLE_FILE,"wb");
+	fwrite(inner_axe_table, sizeof(float), WEIGHT_TABLE_SIZE, file);
 	fclose(file);
+
+	file = fopen(CORNER_RECT_TABLE_FILE,"wb");
+	fwrite(corner_rect_table, sizeof(float), WEIGHT_TABLE_SIZE, file);
+	fclose(file);
+
+	file = fopen(CENTER_RECT_TABLE_FILE,"wb");
+	fwrite(center_rect_table, sizeof(float), WEIGHT_TABLE_SIZE, file);
+	fclose(file);
+
+	file = fopen(EXTRA_TABLE_FILE,"wb");
+	fwrite(extra_table, sizeof(float), EXTRA_TABLE_SIZE, file);
+	fclose(file);
+	printf("[done]\n");
 }
 

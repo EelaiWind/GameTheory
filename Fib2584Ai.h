@@ -15,11 +15,14 @@
 #define INNER 0
 #define OUTER 1
 
-#define WEIGHT_TABLE_SIZE 1048576 //2^20
 #define EXTRA_TABLE_SIZE 262144 //2^18
+#define EXTRA_TABLE_FILE "_extra_table"
 
-#define WEIGHT_TABLE_FILE "weightTable.txt"
-#define EXTRA_TABLE_FILE "extraTable.txt"
+#define WEIGHT_TABLE_SIZE 64000000 //20^6
+#define OUTER_AXE_TABLE_FILE "_inner_axe_table"
+#define INNER_AXE_TABLE_FILE "_outer_axe_table"
+#define CORNER_RECT_TABLE_FILE "_corner_rect_table"
+#define CENTER_RECT_TABLE_FILE "_center_rect_table"
 
 class Fib2584Ai
 {
@@ -50,11 +53,11 @@ private:
 	static int getTupleIndex(int);
 	MoveDirection chooseNextDirection(const int [4][4]);
 	void saveweightTable();
-	double updateWeightTable();
+	float updateWeightTable();
 	
 	int countGame;
-	double alpha;
-	double **weightTable, *extraTable;
+	float alpha;
+	float *extra_table, *outer_axe_table, *inner_axe_table, *corner_rect_table, *center_rect_table;
 	bool isTraining;
 	std::list<Fib2584Ai::BoardFeature> recordfeature;
 };

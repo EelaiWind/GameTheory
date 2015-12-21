@@ -3,22 +3,24 @@
 
 #include "Fib2584Ai.h"
 
-#define IGNORE false
+#define IGNORE false //ignore extra feature
 
 class Fib2584Ai::BoardFeature{
 	public:
 		BoardFeature(const int [4][4], int);
-		double getBoardScore( const double *const *, double const *);
+		float getBoardScore( float const *, float const *, float const *, float const *, float const *);
 		
-		int outerFeature[4], innerFeature[4];
+		int outer_axe_feature[8],inner_axe_feature[8],corner_rect_feature[8],center_rect_feature[4];
 		int extraFeature;
 		int mergeScore;
-		string boardString;
-		static void printTuple(int);
-	
 	private:
 		int getExtraFeature(const int[4][4]);
 		int getSequenceLength(const int [4][4], int, int);
+		static const short outer_axe_index[8][6];
+	    static const short inner_axe_index[8][6];
+	    static const short corner_rect_index[8][6];
+	    static const short center_rect_index[8][6];
+	    static const int tupleOffset[6];
 };
 
 #endif // __BOARDFEATURE_H__
